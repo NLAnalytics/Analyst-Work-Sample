@@ -1,0 +1,363 @@
+# Importing Libraries
+
+import pandas as pd
+pd.options.mode.chained_assignment = None
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.metrics import accuracy_score,recall_score,precision_score,f1_score
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
+from sklearn.feature_selection import RFE
+import seaborn as sns
+
+# Importing Data
+
+df=pd.read_csv('BankChurners.csv')
+print([df['Avg_Utilization_Ratio'].min(),df['Avg_Utilization_Ratio'].max()])
+print(df.columns.tolist())
+print(df)
+
+# Convert String Variables to Usable Integers
+
+df['churned']=None
+for i in range(len(df['Attrition_Flag'])):
+    if df['Attrition_Flag'][i]=='Attrited Customer':
+        df['churned'][i]=1
+    else:
+        df['churned'][i]=0
+df['gend']=None
+for i in range(len(df['Gender'])):
+    if df['Gender'][i]=='M':
+        df['gend'][i]=1
+    else:
+        df['gend'][i]=0
+df['educ']=None
+for i in range(len(df['Education_Level'])):
+    if df['Education_Level'][i]=='High School':
+        df['educ'][i]=1
+    elif df['Education_Level'][i]=='Graduate':
+        df['educ'][i]=2
+    elif df['Education_Level'][i]=='Uneducated':
+        df['educ'][i]=0
+    elif df['Education_Level'][i]=='College':
+        df['educ'][i]=3
+    elif df['Education_Level'][i]=='Post-Graduate':
+        df['educ'][i]=4
+    elif df['Education_Level'][i]=='Doctorate':
+        df['educ'][i]=5
+
+df['Divorced']=0
+df['Single']=0
+df['Married']=0
+for i in range(len(df['Marital_Status'])):
+    if df['Marital_Status'][i]=='Married':
+        df['Married'][i]=1
+    elif df['Marital_Status'][i]=='Single':
+        df['Single'][i]=1
+    elif df['Marital_Status'][i]=='Divorced':
+        df['Divorced'][i]=1
+df['income']=None
+for i in range(len(df['Income_Category'])):
+    if df['Income_Category'][i]=='$60K - $80K':
+        df['income'][i]=2
+    elif df['Income_Category'][i]=='Less than $40K':
+        df['income'][i]=0
+    elif df['Income_Category'][i]=='$80K - $120K':
+        df['income'][i]=3
+    elif df['Income_Category'][i]=='$40K - $60K':
+        df['income'][i]=1
+    elif df['Income_Category'][i]=='$120K +':
+        df['income'][i]=4
+df['blue']=0
+df['gold']=0
+df['silver']=0
+df['platinum']=0
+for i in range(len(df['Card_Category'])):
+    if df['Card_Category'][i]=='Blue':
+        df['blue'][i]=1
+    elif df['Card_Category'][i]=='Gold':
+        df['gold'][i]=1
+    elif df['Card_Category'][i]=='Silver':
+        df['silver'][i]=1
+    elif df['Card_Category'][i]=='Platinum':
+        df['platinum'][i]=1
+
+# Normalizing Columns for Equal Weighting
+
+x_column_list=['gend','educ','Divorced','Single','Married','income','blue','gold','silver','platinum','Customer_Age','Dependent_count','Months_on_book', 'Total_Relationship_Count', 'Months_Inactive_12_mon', 'Contacts_Count_12_mon', 'Credit_Limit', 'Total_Revolving_Bal', 'Avg_Open_To_Buy', 'Total_Amt_Chng_Q4_Q1', 'Total_Trans_Amt', 'Total_Trans_Ct', 'Total_Ct_Chng_Q4_Q1']
+norm_column_list=[]
+for i in x_column_list:
+    df[i+' norm']=(df[i]-np.mean(df[i]))/np.std(df[i])
+    norm_column_list.append(i+' norm')
+print(norm_column_list)
+
+# Dropping observations with missing values
+
+print(len(df))
+df=df.dropna(subset=norm_column_list,how='any')
+print(len(df))
+
+# Creating a Train-Test Split
+
+y=df['churned'].tolist()
+x_train,x_test,y_train,y_test=train_test_split(df[norm_column_list],y,train_size=0.8,test_size=0.2)
+
+# Logistic Regression
+
+Logistic_Model=LogisticRegression()
+Feature_Selection=RFE(Logistic_Model,n_features_to_select=8,step=1)
+Feature_Selection.fit(x_train[norm_column_list],y_train)
+lst=Feature_Selection.support_
+lst=lst.tolist()
+best_features=[i for i, val in enumerate(lst) if val]
+best_columns=x_train.columns[best_features].tolist()
+Logistic_Model.fit(x_train[best_columns],y_train)
+predictions_40=[]
+predicted_proba=[]
+for i in Logistic_Model.predict_proba(x_test[best_columns]):
+    if i[0]>0.4:
+        predictions_40.append(0)
+    elif i[0]<0.4:
+        predictions_40.append(1)
+    predicted_proba.append(i[0])
+print('50 Threshold')
+print(accuracy_score(Logistic_Model.predict(x_test[best_columns]),y_test))
+print(recall_score(Logistic_Model.predict(x_test[best_columns]),y_test))
+print(precision_score(Logistic_Model.predict(x_test[best_columns]),y_test))
+print(f1_score(Logistic_Model.predict(x_test[best_columns]),y_test))
+print('40 Threshold')
+print(accuracy_score(predictions_40,y_test))
+print(recall_score(predictions_40,y_test))
+print(precision_score(predictions_40,y_test))
+print(f1_score(predictions_40,y_test))
+coefficients=Logistic_Model.coef_.tolist()
+coefficients=coefficients[0]
+
+# Plotting Coefficients
+
+plt.cla()
+plt.clf()
+plt.close('all')
+plt.figure(figsize=(10,5),facecolor='#002845')
+fig, ax=plt.subplots()
+plt.xlabel('Regressor')
+plt.ylabel('Coefficient')
+plt.bar(range(len(coefficients)),coefficients, color='#00cfcc')
+fig.set_facecolor('#002845')
+ax.set_facecolor('#002845')
+ax.spines['bottom'].set_color('#00cfcc')
+ax.spines['left'].set_color('#00cfcc')
+ax.tick_params(axis='x', colors='#00cfcc')
+ax.tick_params(axis='y', colors='#00cfcc')
+ax.xaxis.label.set_color('#00cfcc')
+x_values=[-1,len(coefficients)]
+y_values=[0,0]
+plt.plot(x_values,y_values,color='#ff9973')
+ax.yaxis.label.set_color('#00cfcc')
+ax.set_xticks(range(len(coefficients)))
+ax.set_xticklabels(['Male','Relationship Count','Months Inactive','Contact Count','Revolving Balance','Transaction Total','Transaction Count','Increase in Spending'],rotation=90)
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+plt.title('Coefficients (Effect on Probability of User Churn)', color='#00cfcc')
+plt.savefig('coefficients.png',inplace=True,facecolor=fig.get_facecolor(), bbox_inches="tight")
+plt.show()
+
+# Support Vector Machines
+
+SVM_Model=SVC(kernel='linear')
+SVM_Model.fit(x_train,y_train)
+print(SVM_Model.predict(x_train))
+print(SVM_Model.score(x_test,y_test))
+print(accuracy_score(SVM_Model.predict(x_test),y_test))
+print(recall_score(SVM_Model.predict(x_test),y_test))
+print(precision_score(SVM_Model.predict(x_test),y_test))
+print(f1_score(SVM_Model.predict(x_test),y_test))
+
+# Random Forests
+
+Random_Forests_Model=RandomForestClassifier(n_estimators=1000)
+Random_Forests_Model.fit(x_train,y_train)
+print(Random_Forests_Model.predict(x_train))
+print(Random_Forests_Model.score(x_test,y_test))
+print(accuracy_score(Random_Forests_Model.predict(x_test),y_test))
+print(recall_score(Random_Forests_Model.predict(x_test),y_test))
+print(precision_score(Random_Forests_Model.predict(x_test),y_test))
+print(f1_score(Random_Forests_Model.predict(x_test),y_test))
+
+# K-Nearest Neighbors
+
+f1_score_max=0
+accuracy_scores=[]
+recall_scores=[]
+precision_scores=[]
+f1_scores=[]
+k_scores=[]
+#Finding the best K to work with
+for i in range(1,100,2):
+    K_Nearest_Neighbor_Model=KNeighborsClassifier(n_neighbors=i)
+    K_Nearest_Neighbor_Model.fit(x_train,y_train)
+    f1=f1_score(K_Nearest_Neighbor_Model.predict(x_test),y_test)
+    if f1>f1_score_max:
+        f1_score_max=f1
+        best_k=i
+    accuracy_scores.append(accuracy_score(K_Nearest_Neighbor_Model.predict(x_test),y_test))
+    precision_scores.append(precision_score(K_Nearest_Neighbor_Model.predict(x_test),y_test))
+    recall_scores.append(recall_score(K_Nearest_Neighbor_Model.predict(x_test),y_test))
+    f1_scores.append(f1_score(K_Nearest_Neighbor_Model.predict(x_test),y_test))
+print(best_k)
+print(f1_scores[best_k-1])
+
+K_Nearest_Neighbor_Model=KNeighborsClassifier(n_neighbors=3)
+K_Nearest_Neighbor_Model.fit(x_train,y_train)
+print(accuracy_score(K_Nearest_Neighbor_Model.predict(x_test),y_test))
+print(recall_score(K_Nearest_Neighbor_Model.predict(x_test),y_test))
+print(precision_score(K_Nearest_Neighbor_Model.predict(x_test),y_test))
+print(f1_score(K_Nearest_Neighbor_Model.predict(x_test),y_test))
+
+# Comparing Accuracies
+
+plt.cla()
+plt.clf()
+plt.close('all')
+plt.figure(figsize=(10,10),facecolor='#002845')
+fig, ax=plt.subplots()
+fig.set_facecolor('#002845')
+ax.set_facecolor('#002845')
+ax.spines['bottom'].set_color('#00cfcc')
+ax.spines['left'].set_color('#00cfcc')
+ax.tick_params(axis='x', colors='#00cfcc')
+ax.tick_params(axis='y', colors='#00cfcc')
+ax.xaxis.label.set_color('#00cfcc')
+ax.yaxis.label.set_color('#00cfcc')
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+n=1
+t=5
+d=4
+w=1
+bars_x_position=[t*i +w*n for i in range(d)]
+plt.bar(bars_x_position,[0.8927403531720078,0.6927083333333334,0.5588235294117647,0.6186046511627908],color='#ff9973')
+n=2
+t=5
+d=4
+w=0.8
+bars_x_position=[t*i +w*n for i in range(d)]
+plt.bar(bars_x_position,[0.8966644865925442,0.773972602739726,0.47478991596638653,0.5885416666666667],color='#00cfcc')
+n=3
+t=5
+d=4
+w=0.8
+bars_x_position=[t*i +w*n for i in range(d)]
+plt.bar(bars_x_position,[0.9045127534336167,0.7759562841530054,0.5748987854251012,0.6604651162790698],color='#e898ac')
+n=4
+t=5
+d=4
+w=0.8
+bars_x_position=[t*i +w*n for i in range(d)]
+plt.bar(bars_x_position,[0.9542184434270765,0.9359605911330049,0.7692307692307693,0.8444444444444444],color='#ffffff')
+n=5
+t=5
+d=4
+w=0.8
+bars_x_position=[t*i +w*n for i in range(d)]
+plt.bar(bars_x_position,[0.8888162197514715,0.7333333333333333,0.4898785425101215,0.587378640776699],color='#948da0')
+plt.xlabel('Measure')
+plt.ylabel('Score')
+plt.xticks([2.5,7.5,12.5,17.5])
+ax.set_xticklabels(['Accuracy','Recall','Precision','F1'])
+plt.legend(['Logistic (50%)','Logistic (40%)','SVM','Random Forests','KNN'],bbox_to_anchor=(1,0.5))
+plt.title('Accuracies by Model', color='#00cfcc')
+plt.savefig('accuracies.png',inplace=True,facecolor=fig.get_facecolor(), bbox_inches="tight")
+plt.show()
+
+# Recording Inertias of Cluster Sizes
+
+inertias2=[]
+num_clusters=list(range(1,30))
+for i in num_clusters:
+    K_Means_Model=KMeans(n_clusters=i,init='k-means++')
+    K_Means_Model.fit(df[['gend norm', 'educ norm', 'Single norm', 'income norm', 'blue norm', 'gold norm', 'silver norm', 'platinum norm', 'Customer_Age norm', 'Dependent_count norm']])
+    inertias2.append(K_Means_Model.inertia_)
+print(inertias2)
+
+# Plotting Inertia of Different Cluster Sizes
+plt.cla()
+plt.clf()
+plt.close('all')
+plt.figure(figsize=(5,10),facecolor='#002845')
+fig, ax=plt.subplots()
+plt.xlabel('Number of Clusters (k)')
+plt.ylabel('Inertia')
+plt.plot(range(1,30),inertias2,color='#00cfcc')
+fig.set_facecolor('#002845')
+ax.set_facecolor('#002845')
+ax.spines['bottom'].set_color('#00cfcc')
+ax.spines['left'].set_color('#00cfcc')
+ax.tick_params(axis='x', colors='#00cfcc')
+ax.tick_params(axis='y', colors='#00cfcc')
+ax.xaxis.label.set_color('#00cfcc')
+ax.yaxis.label.set_color('#00cfcc')
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+x_values=[7,7]
+y_values=[0,inertias2[7]]
+plt.plot(x_values,y_values,color='#ff9973',linestyle='--')
+x_values=[0,7]
+y_values=[inertias2[7],inertias2[7]]
+plt.plot(x_values,y_values,color='#ff9973',linestyle='--')
+plt.xticks([0,7,10,20,30])
+plt.yticks([0,10000,24658,30000,40000,50000,60000,70000])
+plt.title('Inertia Plot of Varying Cluster Sizes', color='#00cfcc')
+plt.savefig('inertias.png',inplace=True,facecolor=fig.get_facecolor())
+plt.show()
+
+# Fitting the K-Means Clustering Model
+
+K_Means_Model=KMeans(n_clusters=7,init='k-means++')
+K_Means_Model.fit(df[['gend norm', 'educ norm', 'Single norm', 'income norm', 'blue norm', 'gold norm', 'silver norm', 'platinum norm', 'Customer_Age norm', 'Dependent_count norm']])
+labels=K_Means_Model.labels_
+df['cluster_label']=labels
+print(df)
+percent_churns=[]
+for i in range(7):
+    temp_df=df[df['cluster_label']==i]
+    percent_churns.append(round(temp_df['churned'].sum()/len(temp_df)*100))
+print(df['churned'])
+print(percent_churns)
+
+#  Plotting Sizes of Different Clusters
+
+populations=[]
+populations.append(df[df['cluster_label']==0]['CLIENTNUM'].count())
+populations.append(df[df['cluster_label']==1]['CLIENTNUM'].count())
+
+populations.append(df[df['cluster_label']==3]['CLIENTNUM'].count())
+populations.append(df[df['cluster_label']==4]['CLIENTNUM'].count())
+
+populations.append(df[df['cluster_label']==5]['CLIENTNUM'].count())
+populations.append(df[df['cluster_label']==2]['CLIENTNUM'].count())
+populations.append(df[df['cluster_label']==6]['CLIENTNUM'].count())
+print(populations)
+plt.figure(figsize=(5,7),facecolor='#002845')
+plt.pie(populations,autopct='%0.2f%%', textprops={'color':"#00cfcc"},pctdistance=1.2,labeldistance=1)
+plt.axis('equal')
+plt.gcf().subplots_adjust(bottom=0.15)
+plt.legend(['Cluster 1 (14% Churning)', 'Cluster 2 (17% Churning)', 'Cluster 3 (18% Churning)', 'Cluster 4 (16% Churning)', 'Cluster 5 (15% Churning)', 'Cluster 6 (25% Churning)', 'Cluster 7 (18% Churning)'],bbox_to_anchor=(1,0.7))
+plt.title('Sizes of Clusters', color='#00cfcc')
+plt.savefig('cluster sizes.png',inplace=True,facecolor=fig.get_facecolor(), bbox_inches="tight")
+
+plt.show()
+
+# Checking for cluster sizes
+
+for i in range(7):
+    churn0=round(df[df['cluster_label']==i][df['churned']==1]['CLIENTNUM'].count()/df[df['cluster_label']==i]['CLIENTNUM'].count()*100)
+    print('Cluster '+str(i)+' User Churn:'+str(churn0)+'%')
+
+# Checking the properties of each cluster
+print(K_Means_Model.cluster_centers_[1])
+['gend norm', 'educ norm', 'Single norm', 'income norm', 'blue norm', 'gold norm', 'silver norm', 'platinum norm', 'Customer_Age norm', 'Dependent_count norm']
